@@ -36,40 +36,36 @@ module LineReader
 
 import Prelude
 
-import Control.Monad.Aff (Aff, bracket)
-import Control.Monad.Aff.Class (class MonadAff)
-import Control.Monad.Aff.Console (CONSOLE)
-import Control.Monad.Eff.Class (liftEff)
-import Control.Monad.Eff.Exception (EXCEPTION)
+import Effect.Aff (Aff, bracket)
+import Effect.Aff.Class (class MonadAff)
+import Effect.Class (liftEffect)
 import Control.Monad.Reader (class MonadAsk, ReaderT, ask, runReaderT)
 import Data.Maybe (Maybe(..))
 import Data.Options (Options)
 import Data.Tuple (Tuple(..))
 import Node.Process (stdin)
-import Node.ReadLine.Aff (Interface, InterfaceOptions, READLINE, close, createConsoleInterface, createInterface, noCompletion, prompt, setPrompt)
-import Node.ReadLine.Aff (READLINE, InterfaceOptions, createConsoleInterface, createInterface, output, completer, terminal, historySize, Completer, noCompletion) as RLExports
+import Node.ReadLine.Aff (Interface, InterfaceOptions, close, createConsoleInterface, createInterface, noCompletion, prompt, setPrompt)
+import Node.ReadLine.Aff (InterfaceOptions, createConsoleInterface, createInterface, output, completer, terminal, historySize, Completer, noCompletion) as RLExports
 import Node.ReadLine.Aff (question) as RL
 import Node.Stream (Readable)
 
-type LineReaderEff e = (readline :: READLINE, console :: CONSOLE, exception :: EXCEPTION | e)
-
-type LineReaderM e a = ReaderT Interface (Aff (LineReaderEff e)) a
+type LineReaderM a = ReaderT Interface Aff a
 
 -- | Run a line reader program.
 -- | You can pass your own options and readable stream or pass Nothing to use
 -- | the node console.
 runLineReader
   :: forall r a e
-   . Maybe (Tuple (Readable r (LineReaderEff e)) (Options InterfaceOptions))
-  -> LineReaderM e a
-  -> Aff (LineReaderEff e) a
+   . Maybe (Tuple (Readable r) (Options InterfaceOptions))
+  -> LineReaderM a
+  -> Aff a
 runLineReader readeropts prog = bracket buildInterface close runner
   where
-    runner :: Interface -> Aff (LineReaderEff e) a
+    runner :: Interface -> Aff a
     runner = runReaderT prog
-    buildInterface :: Aff (LineReaderEff e) Interface
+    buildInterface :: Aff Interface
     buildInterface = do
-      interface <- liftEff $ case readeropts of
+      interface <- liftEffect $ case readeropts of
                      Just (Tuple r opts) -> createInterface stdin opts
                      Nothing -> createConsoleInterface noCompletion
       setPrompt "" interface
@@ -77,16 +73,16 @@ runLineReader readeropts prog = bracket buildInterface close runner
 
 -- | Read a single line from input.
 readLine
-  :: forall eff m
-  . MonadAff (readline :: READLINE | eff) m
+  :: forall m
+  . MonadAff m
   => MonadAsk Interface m
   => m String
 readLine = ask >>= prompt
 
 -- | Prompt for input, then read a line
 question
-  :: forall e m
-  . MonadAff (readline :: READLINE, console :: CONSOLE | e) m
+  :: forall m
+  . MonadAff  m
   => MonadAsk Interface m
   => String
   -> m String

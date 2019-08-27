@@ -25,16 +25,14 @@ module LineReader.Run
 
 import Prelude
 
-import Control.Monad.Aff (Aff)
-import Control.Monad.Aff.Console (CONSOLE)
-import Control.Monad.Eff.Exception (EXCEPTION)
+import Effect.Aff (Aff)
 import Control.Monad.Reader (ReaderT(ReaderT))
 import Data.Maybe (Maybe)
 import Data.Options (Options)
 import Data.Tuple (Tuple)
 import LineReader (runLineReader) as LR
-import Node.ReadLine.Aff (Interface, InterfaceOptions, READLINE, prompt)
-import Node.ReadLine.Aff (READLINE, InterfaceOptions, createConsoleInterface, createInterface, output, completer, terminal, historySize, Completer, noCompletion) as RLExports
+import Node.ReadLine.Aff (Interface, InterfaceOptions, prompt)
+import Node.ReadLine.Aff (InterfaceOptions, createConsoleInterface, createInterface, output, completer, terminal, historySize, Completer, noCompletion) as RLExports
 import Node.ReadLine.Aff (question) as A
 import Node.Stream (Readable)
 import Run (AFF, FProxy, Run, SProxy(SProxy), interpretRec, lift, liftAff, on, runBaseAff, send)
@@ -50,37 +48,37 @@ type LINEREADER = FProxy LineReaderF
 
 _linereader = SProxy :: SProxy "linereader"
 
-handleLineReader :: forall eff r. LineReaderF ~> Run (reader :: READER Interface, aff :: AFF (readline :: READLINE, console :: CONSOLE, exception :: EXCEPTION | eff) | r)
+handleLineReader :: forall r. LineReaderF ~> Run (reader :: READER Interface, aff :: AFF | r)
 handleLineReader = case _ of
   ReadLine handleInput -> do
     interface <- ask
     response <- liftAff $ prompt interface
     pure $ handleInput response
   Question q handleInput -> do
-    interface <- ask 
+    interface <- ask
     response <- liftAff $ A.question q interface
     pure $ handleInput response
 
 readLine :: forall r. Run (linereader :: LINEREADER | r) String
-readLine = lift _linereader (ReadLine id)
+readLine = lift _linereader (ReadLine identity)
 
 question :: forall r. String -> Run (linereader :: LINEREADER | r) String
-question q = lift _linereader (Question q id)
+question q = lift _linereader (Question q identity)
 
 runLineReader
-  :: forall r eff
-   . Run (linereader :: LINEREADER, reader :: READER Interface, aff :: AFF (readline :: READLINE, console :: CONSOLE, exception :: EXCEPTION | eff) | r)
-  ~> Run (reader :: READER Interface, aff :: AFF (readline :: READLINE, console :: CONSOLE, exception :: EXCEPTION | eff) | r)
+  :: forall r
+   . Run (linereader :: LINEREADER, reader :: READER Interface, aff :: AFF | r)
+  ~> Run (reader :: READER Interface, aff :: AFF | r)
 runLineReader = interpretRec (on _linereader handleLineReader send)
 
 -- | Run a Line Reader computation from the Run Monad into the Aff Monad
 lineReaderToAff
-  :: forall r a e
-   . Maybe (Tuple (Readable r (readline :: READLINE, console :: CONSOLE, exception :: EXCEPTION | e)) (Options InterfaceOptions))
-  -> Run (reader :: READER Interface, aff :: AFF (readline :: READLINE, console :: CONSOLE, exception :: EXCEPTION | e)) a
-  -> Aff (readline :: READLINE, console :: CONSOLE, exception :: EXCEPTION | e) a
+  :: forall r a
+   . Maybe (Tuple (Readable r) (Options InterfaceOptions))
+  -> Run (reader :: READER Interface, aff :: AFF) a
+  -> Aff a
 lineReaderToAff opts prog =
   LR.runLineReader opts $ ReaderT runprog
     where
-      runprog :: Interface -> (Aff (readline :: READLINE, console :: CONSOLE, exception :: EXCEPTION | e)) a
+      runprog :: Interface -> Aff a
       runprog interface = runBaseAff (runReader interface prog)
