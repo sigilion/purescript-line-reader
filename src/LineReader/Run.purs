@@ -20,6 +20,7 @@ module LineReader.Run
   , lineReaderToAff
   , readLine
   , question
+  , LINEREADER
   , module RLExports
   ) where
 
